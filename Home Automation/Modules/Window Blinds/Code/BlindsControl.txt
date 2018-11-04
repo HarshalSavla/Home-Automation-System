@@ -1,0 +1,161 @@
+
+ 
+#include <Servo.h> 
+#include <ESP8266WiFi.h>
+#include <MQTTClient.h>
+#include <ESP8266WebServer.h>
+#include <ESP8266mDNS.h>
+#include <ESP8266HTTPUpdateServer.h>
+
+/* ---------- DO NOT EDIT ANYTHING ABOVE THIS LINE ---------- */
+
+//Only edit the settings in this section
+
+/* WIFI Settings */
+// Name of wifi network
+const char* ssid = "TP-LINK_5806";
+
+// Password to wifi network
+const char* password = "9833705173"; 
+
+/* Web Updater Settings */
+// Host Name of Device
+const char* host = "COSMOS-BlindsControl1";
+
+// Path to access firmware update page (Not Neccessary to change)
+const char* update_path = "/firmware";
+
+// Username to access the web update page
+const char* update_username = "admin";
+
+// Password to access the web update page
+const char* update_password = "admin";
+
+/* MQTT Settings */
+// Topic which listens for commands
+char* subscribeTopic = "COSMOS-SmartHouse/utilities/COSMOS-BlindsControl1"; 
+
+//MQTT Server IP Address
+const char* server = "192.168.0.108";
+
+//Unique device ID 
+const char* mqttDeviceID = "COSMOS-SmartHouseDevice2"; 
+
+
+/* ---------- DO NOT EDIT ANYTHING BELOW THIS LINE ---------- */
+
+
+ESP8266WebServer httpServer(80);
+ESP8266HTTPUpdateServer httpUpdater;
+
+Servo myservo;
+
+WiFiClient net;
+MQTTClient client;
+
+unsigned long lastMillis = 0;
+
+void connect();
+
+void setup() 
+{
+  WiFi.mode(WIFI_STA);
+  
+  WiFi.begin(ssid, password);
+  client.begin(server, net);
+  client.onMessage(messageReceived);
+
+  connect();
+
+  MDNS.begin(host);
+
+  httpUpdater.setup(&httpServer, update_path, update_username, update_password);
+  httpServer.begin();
+
+  MDNS.addService("http", "tcp", 80);
+}
+
+void connect() 
+{
+  while (WiFi.status() != WL_CONNECTED) 
+  {
+    delay(1000);
+  }
+
+  while (!client.connect(mqttDeviceID)) 
+  {
+    delay(1000);
+  }
+
+  client.subscribe(subscribeTopic);
+}
+
+void loop() 
+{
+  client.loop();
+  delay(10);
+
+  if(!client.connected()) 
+  {
+    connect();
+  }
+
+  httpServer.handleClient();
+
+}
+
+void messageReceived(String &topic, String &payload) 
+{
+  String msgString = payload;
+  myservo.attach(2);
+  if (msgString == "UP")
+  {
+    myservo.write(0);               
+    delay(1000);  
+  }
+  else if (msgString == "DOWN")
+  {
+    myservo.write(180);              
+    delay(1000);  
+  }
+  else if (msgString == "STOP")
+  {
+    myservo.write(0);               
+    delay(1000);  
+    myservo.write(100);              
+    delay(1000);  
+  }
+  else if (msgString == "ON")
+  {
+    myservo.write(0);              
+    delay(1000);  
+  }
+  else if (msgString == "OFF")
+  {
+    myservo.write(180);             
+    delay(1000);  
+  }
+  else if (isValidNumber(msgString))
+  {
+    if(msgString.toInt() <= 60 && msgString.toInt() >= 40)
+    {
+      myservo.write(0);               
+      delay(1000);  
+    }
+    myservo.write(msgString.toInt() * 1.8);              
+    delay(1000);  
+  }
+  myservo.detach();
+}
+
+boolean isValidNumber(String str)
+{
+   boolean isNum=false;
+   if(!(str.charAt(0) == '+' || str.charAt(0) == '-' || isDigit(str.charAt(0)))) return false;
+
+   for(byte i=1;i<str.length();i++)
+   {
+       if(!(isDigit(str.charAt(i)) || str.charAt(i) == '.')) return false;
+   }
+   return true;
+}

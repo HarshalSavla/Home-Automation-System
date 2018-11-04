@@ -1,0 +1,127 @@
+
+ 
+#include <Servo.h> 
+#include <ESP8266WiFi.h>
+#include <MQTTClient.h>
+#include <ESP8266WebServer.h>
+#include <ESP8266mDNS.h>
+#include <ESP8266HTTPUpdateServer.h>
+
+const int relayToggle = 4;
+
+
+/* ---------- DO NOT EDIT ANYTHING ABOVE THIS LINE ---------- */
+
+//Only edit the settings in this section
+
+/* WIFI Settings */
+// Name of wifi network
+const char* ssid = "TP-LINK_5806";
+
+// Password to wifi network
+const char* password = "9833705173"; 
+
+/* Web Updater Settings */
+// Host Name of Device
+const char* host = "COSMOS-IrrigationSystem1";
+
+// Path to access firmware update page (Not Neccessary to change)
+const char* update_path = "/firmware";
+
+// Username to access the web update page
+const char* update_username = "admin";
+
+// Password to access the web update page
+const char* update_password = "admin";
+
+/* MQTT Settings */
+// Topic which listens for commands
+char* subscribeTopic = "COSMOS-SmartHouse/utilities/COSMOS-IrrigationSystem1"; 
+
+//MQTT Server IP Address
+const char* server = "192.168.0.108";
+
+//Unique device ID 
+const char* mqttDeviceID = "COSMOS-SmartHouseDevice3"; 
+
+
+/* ---------- DO NOT EDIT ANYTHING BELOW THIS LINE ---------- */
+
+
+ESP8266WebServer httpServer(80);
+ESP8266HTTPUpdateServer httpUpdater;
+
+
+WiFiClient net;
+MQTTClient client;
+
+unsigned long lastMillis = 0;
+
+void connect();
+
+void setup() 
+{
+  
+pinMode (relayToggle, OUTPUT);
+  WiFi.mode(WIFI_STA);
+  
+  WiFi.begin(ssid, password);
+  client.begin(server, net);
+  client.onMessage(messageReceived);
+
+  connect();
+
+  MDNS.begin(host);
+
+  httpUpdater.setup(&httpServer, update_path, update_username, update_password);
+  httpServer.begin();
+
+  MDNS.addService("http", "tcp", 80);
+}
+
+void connect() 
+{
+  while (WiFi.status() != WL_CONNECTED) 
+  {
+    delay(1000);
+  }
+
+  while (!client.connect(mqttDeviceID)) 
+  {
+    delay(1000);
+  }
+
+  client.subscribe(subscribeTopic);
+}
+
+void loop() 
+{
+  client.loop();
+  delay(10);
+
+  if(!client.connected()) 
+  {
+    connect();
+  }
+
+  httpServer.handleClient();
+
+}
+
+void messageReceived(String &topic, String &payload) 
+{
+  String msgString = payload;
+  
+  if (msgString == "ON")
+  {
+    digitalWrite(relayToggle, HIGH);               
+    delay(1000);  
+  }
+  else if (msgString == "OFF")
+  {
+    digitalWrite(relayToggle, LOW);              
+    delay(1000);  
+  }
+  
+}
+
